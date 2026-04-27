@@ -8,6 +8,7 @@ project(JobEngine
 add_executable(job_engine
     src/main.cpp
     src/logger.cpp
+    src/thread_pool.cpp
 )
 
 target_compile_features(job_engine PRIVATE cxx_std_20)
