@@ -1,23 +1,34 @@
 #include "logger.hpp"
 
 #include <iostream>
+#include <utility>
 
-Logger::Logger(const std::string& prefix): prefix_(prefix) {
-    std::cout << "Logger created \n";
+Logger::Logger(std::string prefix)
+    : prefix_(std::move(prefix))
+{
 }
 
-Logger::~Logger() {
-    std::cout << "Logger destroyed \n";
+void Logger::info(const std::string &message)
+{
+    log("INFO", message);
 }
 
-void Logger::log(const std::string& message) {
-    std::cout << prefix_ << message << '\n';
+void Logger::error(const std::string &message)
+{
+    log("ERROR", message);
 }
 
-void Logger::info(const std::string& message) {
-    std::cout << "[INFO]: " << message << '\n';
-}
+void Logger::log(
+    const std::string &level,
+    const std::string &message)
+{
+    std::lock_guard<std::mutex> lock(mutex_);
 
-void Logger::error(const std::string& message) {
-    std::cout << "[ERROR]: " << message << '\n';
+    std::cout
+        << prefix_
+        << "["
+        << level
+        << "] "
+        << message
+        << '\n';
 }

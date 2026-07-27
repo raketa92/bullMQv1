@@ -1,60 +1,96 @@
 #include "thread_pool.hpp"
-#include "logger.hpp"
 
-Logger logger("[ThreadPool]: ");
+#include <stdexcept>
+#include <utility>
 
-ThreadPool::ThreadPool(size_t threadCount): stop_(false) {
-    for (size_t i = 0; i < threadCount; i++)
+ThreadPool::ThreadPool(
+    std::size_t threadCount,
+    Logger &logger,
+    std::size_t maxQueueSize)
+    : stop_(false),
+      logger_(logger),
+      maxQueueSize_(maxQueueSize)
+{
+    if (threadCount == 0)
     {
-        workers_.emplace_back([this]{
+        throw std::invalid_argument(
+            "ThreadPool requires at least one worker");
+    }
+
+    if (maxQueueSize == 0)
+    {
+        throw std::invalid_argument(
+            "ThreadPool queue size must be greater than zero");
+    }
+
+    workers_.reserve(threadCount);
+
+    for (std::size_t i = 0; i < threadCount; ++i)
+    {
+        workers_.emplace_back([this]
+                              {
             while (true)
             {
                 std::function<void()> task;
 
                 {
-                    std::unique_lock<std::mutex> lock(this->queueMutex_);
+                    std::unique_lock<std::mutex> lock(
+                        queueMutex_);
 
-                    this->condition_.wait(lock, [this] {
-                        return this->stop_ || !this->tasks_.empty();
+                    condition_.wait(lock, [this]
+                    {
+                        return stop_ || !tasks_.empty();
                     });
 
-                    if (this->stop_ && this->tasks_.empty()) {
+                    /*
+                     * Graceful ThreadPool shutdown:
+                     *
+                     * If stop was requested but tasks remain,
+                     * workers continue draining the queue.
+                     *
+                     * They exit only when:
+                     * stop_ == true AND tasks_ is empty.
+                     */
+                    if (stop_ && tasks_.empty())
+                    {
                         return;
                     }
 
-                    task = std::move(this->tasks_.front());
-                    logger.log("Task assigned");
-                    this->tasks_.pop();
+                    task = std::move(tasks_.front());
+                    tasks_.pop();
                 }
-            }
-            
-        });
-    }    
-};
 
-ThreadPool::~ThreadPool() {
+                /*
+                 * Queue mutex has already been released.
+                 * Logging and task execution happen outside
+                 * the critical section.
+                 */
+                notFull_.notify_one();
+
+                logger_.info("Task assigned");
+                task();
+            } });
+    }
+}
+
+ThreadPool::~ThreadPool()
+{
     {
-        std::unique_lock<std::mutex> lock(queueMutex_);
+        std::lock_guard<std::mutex> lock(queueMutex_);
         stop_ = true;
     }
 
+    // Wake workers waiting for tasks.
     condition_.notify_all();
+
+    // Wake producers waiting for queue capacity.
+    notFull_.notify_all();
 
     for (std::thread &worker : workers_)
     {
-        if (worker.joinable()) {
+        if (worker.joinable())
+        {
             worker.join();
-            logger.log("Worker thread joined");
         }
     }
-};
-
-void ThreadPool::enqueue(std::function<void()> task) {
-    {
-        std::unique_lock<std::mutex> lock(queueMutex_);
-        tasks_.emplace(std::bind(std::forward<std::function<void()>>(f), std::forward<Args>(args)));
-        logger.log("Task enqueued");
-    }
-
-    condition_.notify_one();
-};
+}

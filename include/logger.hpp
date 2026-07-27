@@ -1,16 +1,22 @@
 #pragma once
 
+#include <mutex>
 #include <string>
 
-class Logger {
-    public:
-        Logger(const std::string& prefix);
-        ~Logger();
+class Logger
+{
+public:
+    explicit Logger(std::string prefix);
 
-        void log(const std::string& message);
-        void info(const std::string& message);
-        void error(const std::string& message);
+    Logger(const Logger &) = delete;
+    Logger &operator=(const Logger &) = delete;
 
-    private:
+    void info(const std::string &message);
+    void error(const std::string &message);
+
+private:
+    void log(const std::string &level, const std::string &message);
+
     std::string prefix_;
+    std::mutex mutex_;
 };
