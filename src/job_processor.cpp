@@ -10,7 +10,7 @@ void JobProcessor::registerHandler(
   handlers_[name] = std::move(handler);
 }
 
-void JobProcessor::process(const Job &job) const
+std::string JobProcessor::process(const Job &job) const
 {
   auto handlerIterator = handlers_.find(job.name);
 
@@ -20,5 +20,5 @@ void JobProcessor::process(const Job &job) const
         "No handler registered for job: " + job.name);
   }
 
-  handlerIterator->second(job);
+  return handlerIterator->second(job);
 }

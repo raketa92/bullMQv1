@@ -9,13 +9,13 @@
 class JobProcessor
 {
 public:
-  using Handler = std::function<void(const Job &)>;
+  using Handler = std::function<std::string(const Job &)>;
 
   void registerHandler(
       const std::string &name,
       Handler handler);
 
-  void process(const Job &job) const;
+  std::string process(const Job &job) const;
 
 private:
   std::unordered_map<std::string, Handler> handlers_;

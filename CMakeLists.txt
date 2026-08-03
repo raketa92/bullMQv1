@@ -15,6 +15,7 @@ add_executable(job_engine
     src/job_queue.cpp
     src/job_processor.cpp
     src/job_store.cpp
+    src/job_service.cpp
     src/worker.cpp
 )
 

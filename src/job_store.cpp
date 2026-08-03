@@ -1,5 +1,8 @@
 #include "job_store.hpp"
 
+#include <stdexcept>
+#include <utility>
+
 bool JobStore::isTerminal(JobStatus status) const
 {
   return status == JobStatus::Completed ||
@@ -8,6 +11,11 @@ bool JobStore::isTerminal(JobStatus status) const
 
 void JobStore::save(const Job &job)
 {
+  if (job.maxAttempts == 0)
+  {
+    throw std::invalid_argument("Job maxAttempts must be at least 1");
+  }
+
   {
     std::lock_guard<std::mutex> lock(mutex_);
     jobs_[job.id] = job;
@@ -41,6 +49,46 @@ void JobStore::updateStatus(
    * Each waiter checks whether its particular job
    * reached Completed or Failed.
    */
+  cv_.notify_all();
+}
+
+void JobStore::markFailed(
+    const std::string &id,
+    const std::string &failureReason)
+{
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    auto jobIterator = jobs_.find(id);
+    if (jobIterator != jobs_.end())
+    {
+      Job &job = jobIterator->second;
+      job.status = JobStatus::Failed;
+      job.failureReason = failureReason;
+      job.result.reset();
+    }
+  }
+
+  cv_.notify_all();
+}
+
+void JobStore::markCompleted(
+    const std::string &id,
+    std::string result)
+{
+
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto jobIterator = jobs_.find(id);
+    if (jobIterator != jobs_.end())
+    {
+      Job &job = jobIterator->second;
+
+      job.status = JobStatus::Completed;
+      job.result = std::move(result);
+      job.failureReason.reset();
+    }
+  }
   cv_.notify_all();
 }
 
@@ -94,4 +142,31 @@ void JobStore::waitUntilFinished(
 
         return isTerminal(
             jobIterator->second.status); });
+}
+
+std::size_t JobStore::startAttempt(const std::string &id)
+{
+  std::size_t attemptsMade;
+
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto iterator = jobs_.find(id);
+
+    if (iterator == jobs_.end())
+    {
+      throw std::runtime_error("Cannot start unknown job: " + id);
+    }
+
+    Job &storedJob = iterator->second;
+
+    ++storedJob.attemptsMade;
+    storedJob.status = JobStatus::Active;
+
+    attemptsMade = storedJob.attemptsMade;
+  }
+
+  cv_.notify_all();
+
+  return attemptsMade;
 }

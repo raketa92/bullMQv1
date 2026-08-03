@@ -18,6 +18,14 @@ public:
       const std::string &id,
       JobStatus status);
 
+  void markFailed(
+      const std::string &id,
+      const std::string &failureReason);
+
+  void markCompleted(
+      const std::string &id,
+      std::string result);
+
   std::optional<Job> findById(
       const std::string &id);
 
@@ -31,6 +39,8 @@ public:
    * Failed
    */
   void waitUntilFinished(const std::string &id);
+
+  std::size_t startAttempt(const std::string &id);
 
 private:
   bool isTerminal(JobStatus status) const;

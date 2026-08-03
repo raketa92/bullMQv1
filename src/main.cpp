@@ -4,6 +4,8 @@
 #include "logger.hpp"
 #include "thread_pool.hpp"
 #include "worker.hpp"
+#include "job_error.hpp"
+#include "job_service.hpp"
 
 #include <iostream>
 #include <stdexcept>
@@ -29,6 +31,54 @@ namespace
 
         return "unknown";
     }
+
+    void registerDemoHandlers(
+        JobProcessor &processor,
+        Logger &logger)
+    {
+        processor.registerHandler(
+            "unstable_job",
+            [&logger](const Job &job) -> std::string
+            {
+                logger.info("Execution unstable_job, attempt " + std::to_string(job.attemptsMade));
+
+                if (job.attemptsMade < 3)
+                {
+                    throw RetryableJobError("Temporary service failure");
+                }
+
+                return "Temporary operation eventually succeeded";
+            });
+
+        processor.registerHandler(
+            "invalid_job",
+            [&logger](const Job &job) -> std::string
+            {
+                logger.info(
+                    "Executing invalid_job, attempt " +
+                    std::to_string(job.attemptsMade));
+
+                throw std::runtime_error(
+                    "Invalid payload");
+            });
+    }
+
+    void printJob(const Job &job)
+    {
+        std::cout
+            << "Job: " << job.id
+            << ", status: "
+            << statusToString(job.status)
+            << ", attempts: "
+            << job.attemptsMade
+            << ", max attempts: "
+            << job.maxAttempts
+            << ", failure reason: "
+            << job.failureReason.value_or("none")
+            << ", result: "
+            << job.result.value_or("none")
+            << '\n';
+    }
 }
 
 int main()
@@ -38,6 +88,7 @@ int main()
     JobStore store;
     JobQueue queue;
     JobProcessor processor;
+    JobService jobService(store, queue);
 
     ThreadPool pool(
         4, // worker thread count
@@ -50,67 +101,45 @@ int main()
         pool,
         store);
 
-    processor.registerHandler(
-        "send_email",
-        [](const Job &job)
-        {
-            std::cout
-                << "Sending email to: "
-                << job.payload
-                << '\n';
-        });
-
-    processor.registerHandler(
-        "fail_job",
-        [](const Job &job)
-        {
-            throw std::runtime_error(
-                "Intentional failure for payload: " +
-                job.payload);
-        });
+    registerDemoHandlers(processor, logger);
 
     worker.start();
 
-    Job job1{
-        "job-1",
-        "send_email",
-        "test@example.com"};
+    Job retryJob{
+        "job-retry",
+        "unstable_job",
+        "temporary operation"};
+    retryJob.maxAttempts = 3;
 
-    Job job2{
-        "job-2",
-        "fail_job",
+    Job permanentFailureJob{
+        "job-permanent",
+        "invalid_job",
         "bad payload"};
+    permanentFailureJob.maxAttempts = 5;
+
+    Job exhaustedRetryJob{"job-retry-exhausted", "unstable_job", "temporary operation"};
+    exhaustedRetryJob.maxAttempts = 2;
 
     /*
-     * At this stage, caller must perform two operations:
-     *
-     * 1. save job for status tracking
-     * 2. push job for execution
-     *
-     * A future QueueService will combine these operations.
+     * JobService saves each job before exposing it
+     * to workers through JobQueue.
      */
-    store.save(job1);
-    queue.push(job1);
-
-    store.save(job2);
-    queue.push(job2);
+    jobService.add(retryJob);
+    jobService.add(permanentFailureJob);
+    jobService.add(exhaustedRetryJob);
 
     /*
      * Proper synchronization.
      *
      * No sleep_for() and no timing assumption.
      */
-    store.waitUntilFinished(job1.id);
-    store.waitUntilFinished(job2.id);
+    store.waitUntilFinished(retryJob.id);
+    store.waitUntilFinished(permanentFailureJob.id);
+    store.waitUntilFinished(exhaustedRetryJob.id);
 
     for (const Job &job : store.all())
     {
-        std::cout
-            << "id=" << job.id
-            << " name=" << job.name
-            << " payload=" << job.payload
-            << " status=" << statusToString(job.status)
-            << '\n';
+        printJob(job);
     }
 
     worker.stop();

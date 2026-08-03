@@ -20,6 +20,11 @@ struct Job
   std::string name;
   std::string payload;
   JobStatus status = JobStatus::Waiting;
+
+  std::size_t attemptsMade = 0;
+  std::size_t maxAttempts = 1;
+  std::optional<std::string> failureReason = std::nullopt;
+  std::optional<std::string> result = std::nullopt;
 };
 
 class JobQueue
