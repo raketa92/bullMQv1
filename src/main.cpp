@@ -6,6 +6,7 @@
 #include "worker.hpp"
 #include "job_error.hpp"
 #include "job_service.hpp"
+#include <string>
 
 #include <iostream>
 #include <stdexcept>
@@ -106,36 +107,36 @@ int main()
     worker.start();
 
     Job retryJob{
-        "job-retry",
+        "",
         "unstable_job",
         "temporary operation"};
     retryJob.maxAttempts = 3;
 
     Job permanentFailureJob{
-        "job-permanent",
+        "",
         "invalid_job",
         "bad payload"};
     permanentFailureJob.maxAttempts = 5;
 
-    Job exhaustedRetryJob{"job-retry-exhausted", "unstable_job", "temporary operation"};
+    Job exhaustedRetryJob{"", "unstable_job", "temporary operation"};
     exhaustedRetryJob.maxAttempts = 2;
 
     /*
      * JobService saves each job before exposing it
      * to workers through JobQueue.
      */
-    jobService.add(retryJob);
-    jobService.add(permanentFailureJob);
-    jobService.add(exhaustedRetryJob);
+    const std::string retryJobId = jobService.add(retryJob);
+    const std::string permanentFailureJobId = jobService.add(permanentFailureJob);
+    const std::string exhaustedRetryJobId = jobService.add(exhaustedRetryJob);
 
     /*
      * Proper synchronization.
      *
      * No sleep_for() and no timing assumption.
      */
-    store.waitUntilFinished(retryJob.id);
-    store.waitUntilFinished(permanentFailureJob.id);
-    store.waitUntilFinished(exhaustedRetryJob.id);
+    store.waitUntilFinished(retryJobId);
+    store.waitUntilFinished(permanentFailureJobId);
+    store.waitUntilFinished(exhaustedRetryJobId);
 
     for (const Job &job : store.all())
     {
