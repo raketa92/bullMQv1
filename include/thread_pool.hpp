@@ -14,6 +14,7 @@
 #include <type_traits>
 #include <utility>
 #include <vector>
+#include <cstdint>
 
 class ThreadPool
 {
@@ -29,8 +30,10 @@ public:
     ThreadPool &operator=(const ThreadPool &) = delete;
 
     template <class F, class... Args>
-    auto enqueue(F &&function, Args &&...args)
-        -> std::future<std::invoke_result_t<F, Args...>>
+    auto enqueueWithPriority(
+        std::uint32_t priority,
+        F &&function,
+        Args &&...args) -> std::future<std::invoke_result_t<F, Args...>>
     {
         using ReturnType = std::invoke_result_t<F, Args...>;
 
@@ -83,17 +86,16 @@ public:
                     "enqueue on stopped ThreadPool");
             }
 
-            /*
-             * tasks_ stores std::function<void()>.
-             *
-             * packagedTask is wrapped in a no-argument,
-             * no-return-value lambda.
-             *
-             * Calling (*packagedTask)() executes the original
-             * function and saves its result in the future.
-             */
-            tasks_.emplace([packagedTask]
-                           { (*packagedTask)(); });
+            tasks_.push(
+                PrioritizedTask{
+                    priority,
+                    nextTaskSequence_,
+                    [packagedTask]
+                    {
+                        (*packagedTask)();
+                    }});
+
+            ++nextTaskSequence_;
         }
 
         logger_.info("Task enqueued");
@@ -102,9 +104,32 @@ public:
         return future;
     }
 
+    template <class F, class... Args>
+    auto enqueue(F &&function, Args &&...args)
+        -> std::future<std::invoke_result_t<F, Args...>>
+    {
+
+        return enqueueWithPriority(0, std::forward<F>(function), std::forward<Args>(args)...);
+    }
+
 private:
+    struct PrioritizedTask
+    {
+        std::uint32_t priority;
+        std::uint64_t sequence;
+        std::function<void()> function;
+    };
+
+    struct TaskComesAfter
+    {
+        bool operator()(
+            const PrioritizedTask &left,
+            const PrioritizedTask &right) const;
+    };
+
     std::vector<std::thread> workers_;
-    std::queue<std::function<void()>> tasks_;
+    std::priority_queue<PrioritizedTask, std::vector<PrioritizedTask>, TaskComesAfter> tasks_;
+    std::uint64_t nextTaskSequence_ = 0;
 
     std::mutex queueMutex_;
 

@@ -56,7 +56,7 @@ ThreadPool::ThreadPool(
                         return;
                     }
 
-                    task = std::move(tasks_.front());
+                    task = tasks_.top().function;
                     tasks_.pop();
                 }
 
@@ -93,4 +93,16 @@ ThreadPool::~ThreadPool()
             worker.join();
         }
     }
+}
+
+bool ThreadPool::TaskComesAfter::operator()(
+    const PrioritizedTask &left,
+    const PrioritizedTask &right) const
+{
+    if (left.priority != right.priority)
+    {
+        return left.priority < right.priority;
+    }
+
+    return left.sequence > right.sequence;
 }

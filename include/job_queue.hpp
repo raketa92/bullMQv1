@@ -6,6 +6,8 @@
 #include <queue>
 #include <string>
 #include <chrono>
+#include <cstdint>
+#include <vector>
 
 enum class JobStatus
 {
@@ -21,8 +23,10 @@ struct Job
   std::string name;
   std::string payload;
   JobStatus status = JobStatus::Waiting;
+
   std::chrono::milliseconds delay{0};
   std::chrono::milliseconds retryBackoff{0};
+  std::uint32_t priority = 0;
 
   std::size_t attemptsMade = 0;
   std::size_t maxAttempts = 1;
@@ -46,7 +50,21 @@ public:
   void shutdown();
 
 private:
-  std::queue<Job> queue_;
+  struct QueuedJob
+  {
+    std::uint64_t sequence;
+    Job job;
+  };
+
+  struct JobComesAfter
+  {
+    bool operator()(
+        const QueuedJob &left,
+        const QueuedJob &right) const;
+  };
+
+  std::priority_queue<QueuedJob, std::vector<QueuedJob>, JobComesAfter> queue_;
+  std::uint64_t nextSequence_ = 0;
   std::mutex mutex_;
   std::condition_variable cv_;
 

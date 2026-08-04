@@ -71,6 +71,8 @@ namespace
             << "Job: " << job.id
             << ", status: "
             << statusToString(job.status)
+            << ", priority: "
+            << job.priority
             << ", attempts: "
             << job.attemptsMade
             << ", max attempts: "
@@ -95,10 +97,7 @@ int main()
 
     JobService jobService(store, queue, scheduler);
 
-    ThreadPool pool(
-        4, // worker thread count
-        logger,
-        100); // maximum ThreadPool task queue size
+    ThreadPool pool(4, logger, 100);
 
     Worker worker(
         queue,
@@ -110,7 +109,6 @@ int main()
     registerDemoHandlers(processor, logger);
 
     scheduler.start();
-    worker.start();
 
     Job retryJob{
         "",
@@ -119,24 +117,29 @@ int main()
     retryJob.maxAttempts = 3;
     retryJob.delay = std::chrono::milliseconds{500};
     retryJob.retryBackoff = std::chrono::milliseconds{100};
+    retryJob.priority = 100;
 
     Job permanentFailureJob{
         "",
         "invalid_job",
         "bad payload"};
     permanentFailureJob.maxAttempts = 5;
+    permanentFailureJob.priority = 10;
 
     Job exhaustedRetryJob{"", "unstable_job", "temporary operation"};
     exhaustedRetryJob.maxAttempts = 2;
     exhaustedRetryJob.retryBackoff = std::chrono::milliseconds{100};
+    exhaustedRetryJob.priority = 1;
 
     /*
      * JobService saves each job before exposing it
      * to workers through JobQueue.
      */
     const std::string retryJobId = jobService.add(retryJob);
-    const std::string permanentFailureJobId = jobService.add(permanentFailureJob);
     const std::string exhaustedRetryJobId = jobService.add(exhaustedRetryJob);
+    const std::string permanentFailureJobId = jobService.add(permanentFailureJob);
+
+    worker.start();
 
     /*
      * Proper synchronization.

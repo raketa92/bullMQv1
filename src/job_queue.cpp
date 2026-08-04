@@ -12,7 +12,8 @@ void JobQueue::push(Job job)
       return;
     }
 
-    queue_.push(std::move(job));
+    queue_.push(QueuedJob{nextSequence_, std::move(job)});
+    ++nextSequence_;
   }
 
   // Wake one dispatcher waiting in pop().
@@ -31,7 +32,7 @@ std::optional<Job> JobQueue::pop()
     return std::nullopt;
   }
 
-  Job job = std::move(queue_.front());
+  Job job = queue_.top().job;
   queue_.pop();
 
   return job;
@@ -49,4 +50,16 @@ void JobQueue::shutdown()
    * while the queue is empty.
    */
   cv_.notify_all();
+}
+
+bool JobQueue::JobComesAfter::operator()(
+    const QueuedJob &left,
+    const QueuedJob &right) const
+{
+  if (left.job.priority != right.job.priority)
+  {
+    return left.job.priority < right.job.priority;
+  }
+
+  return left.sequence > right.sequence;
 }

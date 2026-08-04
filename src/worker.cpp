@@ -46,6 +46,8 @@ void Worker::start()
                 break;
             }
 
+            const auto jobPriority = optionalJob->priority;
+
             /*
              * Move the Job into the ThreadPool task.
              *
@@ -53,7 +55,8 @@ void Worker::start()
              * JobQueue::pop() while pool workers perform
              * the actual processing.
              */
-            pool_.enqueue(
+            pool_.enqueueWithPriority(
+                jobPriority,
                 [this, job = std::move(*optionalJob)]() mutable
                 {
                     job.attemptsMade = store_.startAttempt(job.id);
