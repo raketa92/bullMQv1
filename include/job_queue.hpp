@@ -5,6 +5,7 @@
 #include <optional>
 #include <queue>
 #include <string>
+#include <chrono>
 
 enum class JobStatus
 {
@@ -20,6 +21,8 @@ struct Job
   std::string name;
   std::string payload;
   JobStatus status = JobStatus::Waiting;
+  std::chrono::milliseconds delay{0};
+  std::chrono::milliseconds retryBackoff{0};
 
   std::size_t attemptsMade = 0;
   std::size_t maxAttempts = 1;

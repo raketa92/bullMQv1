@@ -7,10 +7,12 @@
 
 Worker::Worker(
     JobQueue &queue,
+    DelayedJobScheduler &scheduler,
     JobProcessor &processor,
     ThreadPool &pool,
     JobStore &store)
     : queue_(queue),
+      scheduler_(scheduler),
       processor_(processor),
       pool_(pool),
       store_(store),
@@ -72,7 +74,15 @@ void Worker::start()
                         {
                             job.status = JobStatus::Waiting;
                             store_.updateStatus(job.id, JobStatus::Waiting);
-                            queue_.push(std::move(job));
+                            const std::chrono::milliseconds retryDelay = calculateRetryDelay(job);
+                            if (retryDelay > std::chrono::milliseconds::zero())
+                            {
+                                scheduler_.schedule(std::move(job), retryDelay);
+                            }
+                            else
+                            {
+                                queue_.push(std::move(job));
+                            }
                         }
                         else
                         {
@@ -104,4 +114,24 @@ void Worker::stop()
     {
         dispatcher_.join();
     }
+}
+
+std::chrono::milliseconds Worker::calculateRetryDelay(
+    const Job &job) const
+{
+    std::chrono::milliseconds delay = job.retryBackoff;
+
+    for (std::size_t attempt = 1; attempt < job.attemptsMade; ++attempt)
+    {
+        const std::chrono::milliseconds maximum = std::chrono::milliseconds::max();
+
+        if (delay > maximum / 2)
+        {
+            return maximum;
+        }
+
+        delay *= 2;
+    }
+
+    return delay;
 }

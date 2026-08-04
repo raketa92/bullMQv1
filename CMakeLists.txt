@@ -17,6 +17,7 @@ add_executable(job_engine
     src/job_store.cpp
     src/job_service.cpp
     src/worker.cpp
+    src/delayed_job_scheduler.cpp
 )
 
 target_include_directories(job_engine PRIVATE include)

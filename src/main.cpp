@@ -6,6 +6,7 @@
 #include "worker.hpp"
 #include "job_error.hpp"
 #include "job_service.hpp"
+#include "delayed_job_scheduler.hpp"
 #include <string>
 
 #include <iostream>
@@ -89,7 +90,10 @@ int main()
     JobStore store;
     JobQueue queue;
     JobProcessor processor;
-    JobService jobService(store, queue);
+
+    DelayedJobScheduler scheduler(queue);
+
+    JobService jobService(store, queue, scheduler);
 
     ThreadPool pool(
         4, // worker thread count
@@ -98,12 +102,14 @@ int main()
 
     Worker worker(
         queue,
+        scheduler,
         processor,
         pool,
         store);
 
     registerDemoHandlers(processor, logger);
 
+    scheduler.start();
     worker.start();
 
     Job retryJob{
@@ -111,6 +117,8 @@ int main()
         "unstable_job",
         "temporary operation"};
     retryJob.maxAttempts = 3;
+    retryJob.delay = std::chrono::milliseconds{500};
+    retryJob.retryBackoff = std::chrono::milliseconds{100};
 
     Job permanentFailureJob{
         "",
@@ -120,6 +128,7 @@ int main()
 
     Job exhaustedRetryJob{"", "unstable_job", "temporary operation"};
     exhaustedRetryJob.maxAttempts = 2;
+    exhaustedRetryJob.retryBackoff = std::chrono::milliseconds{100};
 
     /*
      * JobService saves each job before exposing it
@@ -143,6 +152,7 @@ int main()
         printJob(job);
     }
 
+    scheduler.stop();
     worker.stop();
 
     return 0;
