@@ -1,52 +1,60 @@
 #pragma once
 
 #include "job_queue.hpp"
+#include "sqlite_database.hpp"
 
 #include <condition_variable>
 #include <mutex>
 #include <optional>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 class JobStore
 {
 public:
-  void save(const Job &job);
+    explicit JobStore(const std::string &databasePath);
+    JobStore(const JobStore &) = delete;
+    JobStore &operator=(const JobStore &) = delete;
 
-  void updateStatus(
-      const std::string &id,
-      JobStatus status);
+    void save(const Job &job);
 
-  void markFailed(
-      const std::string &id,
-      const std::string &failureReason);
+    void updateStatus(
+        const std::string &id,
+        JobStatus status);
 
-  void markCompleted(
-      const std::string &id,
-      std::string result);
+    void markFailed(
+        const std::string &id,
+        const std::string &failureReason);
 
-  std::optional<Job> findById(
-      const std::string &id);
+    void markCompleted(
+        const std::string &id,
+        const std::string &result);
 
-  std::vector<Job> all();
+    std::optional<Job> findById(
+        const std::string &id);
 
-  /*
-   * Blocks until the specified job reaches:
-   *
-   * Completed
-   * or
-   * Failed
-   */
-  void waitUntilFinished(const std::string &id);
+    std::vector<Job> all();
 
-  std::size_t startAttempt(const std::string &id);
+    /*
+     * Blocks until the specified job reaches:
+     *
+     * Completed
+     * or
+     * Failed
+     */
+    void waitUntilFinished(const std::string &id);
+
+    std::size_t startAttempt(const std::string &id);
+    std::string generateJobId();
 
 private:
-  bool isTerminal(JobStatus status) const;
+    bool isTerminal(JobStatus status) const;
+    void initializeSchema();
 
-  std::mutex mutex_;
-  std::condition_variable cv_;
+    SqliteDatabase database_;
 
-  std::unordered_map<std::string, Job> jobs_;
+    std::mutex mutex_;
+    std::condition_variable cv_;
+
+    std::optional<Job> findByIdLocked(const std::string &id);
 };

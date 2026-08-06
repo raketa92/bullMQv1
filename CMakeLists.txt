@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(Threads REQUIRED)
+find_package(SQLite3 REQUIRED)
 
 add_executable(job_engine
     src/main.cpp
@@ -18,11 +19,16 @@ add_executable(job_engine
     src/job_service.cpp
     src/worker.cpp
     src/delayed_job_scheduler.cpp
+    src/sqlite_database.cpp
+    src/sqlite_statement.cpp
 )
 
 target_include_directories(job_engine PRIVATE include)
 
-target_link_libraries(job_engine PRIVATE Threads::Threads)
+target_link_libraries(job_engine PRIVATE
+    Threads::Threads
+    SQLite3::SQLite3
+)
 
 target_compile_options(job_engine PRIVATE
     -Wall

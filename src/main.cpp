@@ -89,7 +89,7 @@ int main()
 {
     Logger logger("[APP] ");
 
-    JobStore store;
+    JobStore store("jobs.db");
     JobQueue queue;
     JobProcessor processor;
 

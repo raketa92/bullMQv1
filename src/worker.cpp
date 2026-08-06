@@ -66,7 +66,7 @@ void Worker::start()
                     try
                     {
                         std::string result = processor_.process(job);
-                        store_.markCompleted(job.id, std::move(result));
+                        store_.markCompleted(job.id, result);
                     }
                     catch (const RetryableJobError &error)
                     {

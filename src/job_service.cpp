@@ -21,7 +21,7 @@ std::string JobService::add(Job job)
     throw std::invalid_argument("Job retry backoff cannot be negative");
   }
 
-  job.id = generateId();
+  job.id = store_.generateJobId();
   const std::chrono::milliseconds initialDelay = job.delay;
   std::string generatedId = job.id;
 
@@ -37,10 +37,4 @@ std::string JobService::add(Job job)
   }
 
   return generatedId;
-}
-
-std::string JobService::generateId()
-{
-  const std::uint64_t numericId = nextId_.fetch_add(1);
-  return "job-" + std::to_string(numericId);
 }
