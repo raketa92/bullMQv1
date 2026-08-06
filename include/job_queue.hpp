@@ -26,6 +26,7 @@ struct Job
 
   std::chrono::milliseconds delay{0};
   std::chrono::milliseconds retryBackoff{0};
+  std::optional<std::chrono::system_clock::time_point> availableAt = std::nullopt;
   std::uint32_t priority = 0;
 
   std::size_t attemptsMade = 0;

@@ -2,6 +2,7 @@
 
 #include <exception>
 #include <utility>
+#include <chrono>
 
 #include "job_error.hpp"
 
@@ -59,12 +60,14 @@ void Worker::start()
                 jobPriority,
                 [this, job = std::move(*optionalJob)]() mutable
                 {
-                    job.attemptsMade = store_.startAttempt(job.id);
-
-                    job.status = JobStatus::Active;
-
                     try
                     {
+                        job.attemptsMade = store_.startAttempt(job.id);
+
+                        job.status = JobStatus::Active;
+                        job.availableAt.reset();
+
+                    
                         std::string result = processor_.process(job);
                         store_.markCompleted(job.id, result);
                     }
@@ -75,12 +78,30 @@ void Worker::start()
 
                         if (hasAttemptsRemaining)
                         {
+                            const std::chrono::milliseconds retryDelay =
+                                calculateRetryDelay(job);
+
                             job.status = JobStatus::Waiting;
-                            store_.updateStatus(job.id, JobStatus::Waiting);
-                            const std::chrono::milliseconds retryDelay = calculateRetryDelay(job);
-                            if (retryDelay > std::chrono::milliseconds::zero())
+                            job.availableAt.reset();
+
+                            if (retryDelay >
+                                std::chrono::milliseconds::zero())
                             {
-                                scheduler_.schedule(std::move(job), retryDelay);
+                                job.availableAt =
+                                    std::chrono::system_clock::now() +
+                                    retryDelay;
+                            }
+
+                            store_.markWaiting(
+                                job.id,
+                                job.availableAt);
+
+                            if (retryDelay >
+                                std::chrono::milliseconds::zero())
+                            {
+                                scheduler_.schedule(
+                                    std::move(job),
+                                    retryDelay);
                             }
                             else
                             {

@@ -85,11 +85,12 @@ namespace
     }
 }
 
-int main()
+int main(int argc, char *argv[])
 {
+    const std::string databasePath = argc >= 2 ? argv[1] : "jobs.db";
     Logger logger("[APP] ");
 
-    JobStore store("jobs.db");
+    JobStore store(databasePath);
     JobQueue queue;
     JobProcessor processor;
 
@@ -109,6 +110,7 @@ int main()
     registerDemoHandlers(processor, logger);
 
     scheduler.start();
+    jobService.restoreUnfinished();
 
     Job retryJob{
         "",

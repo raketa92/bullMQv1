@@ -90,6 +90,19 @@ namespace
       job.result = statement.columnText(10);
     }
 
+    if (!statement.columnIsNull(11))
+    {
+      const std::chrono::milliseconds
+          availableAtMilliseconds{
+              statement.columnInt64(11)};
+
+      job.availableAt =
+          std::chrono::system_clock::time_point{
+              std::chrono::duration_cast<
+                  std::chrono::system_clock::duration>(
+                  availableAtMilliseconds)};
+    }
+
     return job;
   }
 }
@@ -252,7 +265,22 @@ void JobStore::save(const Job &job)
       statement.bindNull(11);
     }
 
-    statement.bindNull(12);
+    if (job.availableAt.has_value())
+    {
+      const auto availableAtMilliseconds =
+          std::chrono::duration_cast<
+              std::chrono::milliseconds>(
+              job.availableAt->time_since_epoch());
+
+      statement.bindInt64(
+          12,
+          static_cast<std::int64_t>(
+              availableAtMilliseconds.count()));
+    }
+    else
+    {
+      statement.bindNull(12);
+    }
 
     if (statement.step())
     {
@@ -264,69 +292,6 @@ void JobStore::save(const Job &job)
   /*
    * Someone may already be waiting for this job ID
    * before the job is saved.
-   */
-  cv_.notify_all();
-}
-
-void JobStore::updateStatus(
-    const std::string &id,
-    JobStatus status)
-{
-  if (isTerminal(status))
-  {
-    throw std::invalid_argument("Terminal status must use "
-                                "markCompleted() or markFailed()");
-  }
-
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-
-    SqliteStatement statement(
-        database_.handle(),
-        R"sql(
-        UPDATE jobs
-        SET
-          status = ?,
-          failure_reason = NULL,
-          result = NULL,
-          available_at_ms = NULL,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE id = ?
-        RETURNING id;
-      )sql");
-
-    statement.bindText(1, statusToDatabaseValue(status));
-    statement.bindText(2, id);
-
-    if (!statement.step())
-    {
-      throw std::runtime_error(
-          "SQLite job not found while "
-          "updating status: " +
-          id);
-    }
-
-    const std::string updatedId = statement.columnText(0);
-
-    if (updatedId != id)
-    {
-      throw std::runtime_error(
-          "SQLite updated an unexpected job");
-    }
-
-    if (statement.step())
-    {
-      throw std::runtime_error(
-          "SQLite updated multiple jobs for ID: " +
-          id);
-    }
-  }
-
-  /*
-   * Wake threads waiting for status changes.
-   *
-   * Each waiter checks whether its particular job
-   * reached Completed or Failed.
    */
   cv_.notify_all();
 }
@@ -432,6 +397,75 @@ void JobStore::markCompleted(
   cv_.notify_all();
 }
 
+void JobStore::markWaiting(
+    const std::string &id,
+    const std::optional<std::chrono::system_clock::time_point> &availableAt)
+{
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    SqliteStatement statement(
+        database_.handle(),
+        R"sql(
+    UPDATE jobs
+          SET
+            status = 'waiting',
+            failure_reason = NULL,
+            result = NULL,
+            available_at_ms = ?,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+            AND status = 'active'
+          RETURNING id;
+    )sql");
+
+    if (availableAt.has_value())
+    {
+      const auto availableAtMilliseconds =
+          std::chrono::duration_cast<
+              std::chrono::milliseconds>(
+              availableAt->time_since_epoch());
+
+      statement.bindInt64(
+          1,
+          static_cast<std::int64_t>(
+              availableAtMilliseconds.count()));
+    }
+    else
+    {
+      statement.bindNull(1);
+    }
+
+    statement.bindText(2, id);
+
+    if (!statement.step())
+    {
+      throw std::runtime_error(
+          "Cannot mark job waiting because it is "
+          "unknown or not active: " +
+          id);
+    }
+
+    const std::string updatedId =
+        statement.columnText(0);
+
+    if (updatedId != id)
+    {
+      throw std::runtime_error(
+          "SQLite marked an unexpected job waiting");
+    }
+
+    if (statement.step())
+    {
+      throw std::runtime_error(
+          "SQLite marked multiple jobs waiting for ID: " +
+          id);
+    }
+  }
+
+  cv_.notify_all();
+}
+
 std::optional<Job> JobStore::findById(
     const std::string &id)
 {
@@ -457,7 +491,8 @@ std::optional<Job> JobStore::findByIdLocked(
           attempts_made,
           max_attempts,
           failure_reason,
-          result
+          result,
+          available_at_ms
         FROM jobs
         WHERE id = ?;
       )sql");
@@ -498,7 +533,8 @@ std::vector<Job> JobStore::all()
           attempts_made,
           max_attempts,
           failure_reason,
-          result
+          result,
+          available_at_ms
         FROM jobs
         ORDER BY created_at, id;
       )sql");
@@ -618,4 +654,39 @@ std::string JobStore::generateJobId()
   }
 
   return "job-" + std::to_string(numericId);
+}
+
+std::vector<Job> JobStore::unfinished()
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+
+  SqliteStatement statement(
+      database_.handle(),
+      R"sql(
+      SELECT
+          id,
+          name,
+          payload,
+          status,
+          priority,
+          delay_ms,
+          retry_backoff_ms,
+          attempts_made,
+          max_attempts,
+          failure_reason,
+          result,
+          available_at_ms
+        FROM jobs
+        WHERE status IN ('waiting', 'active')
+        ORDER BY created_at, id;
+    )sql");
+
+  std::vector<Job> jobs;
+
+  while (statement.step())
+  {
+    jobs.push_back(jobFromCurrentRow(statement));
+  }
+
+  return jobs;
 }

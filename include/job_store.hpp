@@ -18,10 +18,6 @@ public:
 
     void save(const Job &job);
 
-    void updateStatus(
-        const std::string &id,
-        JobStatus status);
-
     void markFailed(
         const std::string &id,
         const std::string &failureReason);
@@ -29,6 +25,10 @@ public:
     void markCompleted(
         const std::string &id,
         const std::string &result);
+
+    void markWaiting(
+        const std::string &id,
+        const std::optional<std::chrono::system_clock::time_point> &availableAt);
 
     std::optional<Job> findById(
         const std::string &id);
@@ -46,6 +46,8 @@ public:
 
     std::size_t startAttempt(const std::string &id);
     std::string generateJobId();
+
+    std::vector<Job> unfinished();
 
 private:
     bool isTerminal(JobStatus status) const;

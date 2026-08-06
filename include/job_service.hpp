@@ -13,6 +13,7 @@ public:
       DelayedJobScheduler &scheduler);
 
   std::string add(Job job);
+  void restoreUnfinished();
 
 private:
   JobStore &store_;
