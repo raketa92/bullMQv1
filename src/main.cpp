@@ -7,6 +7,7 @@
 #include "job_error.hpp"
 #include "job_service.hpp"
 #include "delayed_job_scheduler.hpp"
+#include "http_server.hpp"
 #include <string>
 
 #include <iostream>
@@ -14,27 +15,7 @@
 
 namespace
 {
-    const char *statusToString(JobStatus status)
-    {
-        switch (status)
-        {
-        case JobStatus::Waiting:
-            return "waiting";
-
-        case JobStatus::Active:
-            return "active";
-
-        case JobStatus::Completed:
-            return "completed";
-
-        case JobStatus::Failed:
-            return "failed";
-        }
-
-        return "unknown";
-    }
-
-    void registerDemoHandlers(
+    void registerHandlers(
         JobProcessor &processor,
         Logger &logger)
     {
@@ -42,7 +23,7 @@ namespace
             "unstable_job",
             [&logger](const Job &job) -> std::string
             {
-                logger.info("Execution unstable_job, attempt " + std::to_string(job.attemptsMade));
+                logger.info("Executing unstable_job, attempt " + std::to_string(job.attemptsMade));
 
                 if (job.attemptsMade < 3)
                 {
@@ -63,25 +44,6 @@ namespace
                 throw std::runtime_error(
                     "Invalid payload");
             });
-    }
-
-    void printJob(const Job &job)
-    {
-        std::cout
-            << "Job: " << job.id
-            << ", status: "
-            << statusToString(job.status)
-            << ", priority: "
-            << job.priority
-            << ", attempts: "
-            << job.attemptsMade
-            << ", max attempts: "
-            << job.maxAttempts
-            << ", failure reason: "
-            << job.failureReason.value_or("none")
-            << ", result: "
-            << job.result.value_or("none")
-            << '\n';
     }
 }
 
@@ -107,56 +69,23 @@ int main(int argc, char *argv[])
         pool,
         store);
 
-    registerDemoHandlers(processor, logger);
+    HttpServer httpServer(store, jobService);
+
+    registerHandlers(processor, logger);
 
     scheduler.start();
     jobService.restoreUnfinished();
-
-    Job retryJob{
-        "",
-        "unstable_job",
-        "temporary operation"};
-    retryJob.maxAttempts = 3;
-    retryJob.delay = std::chrono::milliseconds{500};
-    retryJob.retryBackoff = std::chrono::milliseconds{100};
-    retryJob.priority = 100;
-
-    Job permanentFailureJob{
-        "",
-        "invalid_job",
-        "bad payload"};
-    permanentFailureJob.maxAttempts = 5;
-    permanentFailureJob.priority = 10;
-
-    Job exhaustedRetryJob{"", "unstable_job", "temporary operation"};
-    exhaustedRetryJob.maxAttempts = 2;
-    exhaustedRetryJob.retryBackoff = std::chrono::milliseconds{100};
-    exhaustedRetryJob.priority = 1;
-
-    /*
-     * JobService saves each job before exposing it
-     * to workers through JobQueue.
-     */
-    const std::string retryJobId = jobService.add(retryJob);
-    const std::string exhaustedRetryJobId = jobService.add(exhaustedRetryJob);
-    const std::string permanentFailureJobId = jobService.add(permanentFailureJob);
-
     worker.start();
+    httpServer.start("127.0.0.1", 8080);
 
-    /*
-     * Proper synchronization.
-     *
-     * No sleep_for() and no timing assumption.
-     */
-    store.waitUntilFinished(retryJobId);
-    store.waitUntilFinished(permanentFailureJobId);
-    store.waitUntilFinished(exhaustedRetryJobId);
+    std::cout
+        << "HTTP server listening on "
+        << "http://127.0.0.1:8080\n"
+        << "Press Enter to stop...\n";
 
-    for (const Job &job : store.all())
-    {
-        printJob(job);
-    }
+    std::cin.get();
 
+    httpServer.stop();
     scheduler.stop();
     worker.stop();
 
