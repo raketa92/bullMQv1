@@ -187,6 +187,12 @@ HttpServer::HttpServer(
     JobService &jobService)
     : store_(store), jobService_(jobService)
 {
+    if (!server_.set_mount_point("/", "./public"))
+    {
+        throw std::runtime_error(
+            "Cannot mount dashboard directory: ./public");
+    }
+
     registerRoutes();
 }
 

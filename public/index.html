@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="/styles.css" />
+
+    <title>Job Engine Dashboard</title>
+  </head>
+
+  <body>
+    <main>
+      <h1>Job Engine Dashboard</h1>
+
+      <section>
+        <h2>Create job</h2>
+
+        <form id="create-job-form">
+          <div>
+            <label for="job-name"> Job name </label>
+
+            <input id="job-name" name="name" type="text" placeholder="unstable_job" required />
+          </div>
+
+          <div>
+            <label for="job-payload"> Payload </label>
+
+            <input id="job-payload" name="payload" type="text" />
+          </div>
+
+          <div>
+            <label for="max-attempts"> Maximum attempts </label>
+
+            <input id="max-attempts" name="maxAttempts" type="number" min="1" max="1000" step="1" value="1" required />
+          </div>
+
+          <div>
+            <label for="delay-ms"> Initial delay (ms) </label>
+
+            <input id="delay-ms" name="delayMs" type="number" min="0" step="1" value="0" required />
+          </div>
+
+          <div>
+            <label for="retry-backoff-ms"> Retry backoff (ms) </label>
+
+            <input id="retry-backoff-ms" name="retryBackoffMs" type="number" min="0" step="1" value="0" required />
+          </div>
+
+          <div>
+            <label for="priority"> Priority </label>
+
+            <input id="priority" name="priority" type="number" min="0" max="4294967295" step="1" value="0" required />
+          </div>
+
+          <button type="submit">Create job</button>
+        </form>
+
+        <p id="create-job-status"></p>
+      </section>
+
+      <p id="connection-status">Loading jobs...</p>
+
+      <section>
+        <h2>Jobs</h2>
+        <div id="jobs"></div>
+      </section>
+    </main>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
