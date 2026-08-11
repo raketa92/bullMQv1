@@ -73,17 +73,21 @@ ThreadPool::ThreadPool(
     }
 }
 
-ThreadPool::~ThreadPool()
+void ThreadPool::stop()
 {
     {
-        std::lock_guard<std::mutex> lock(queueMutex_);
+        std::lock_guard<std::mutex> lock(
+            queueMutex_);
+
+        if (stop_)
+        {
+            return;
+        }
+
         stop_ = true;
     }
 
-    // Wake workers waiting for tasks.
     condition_.notify_all();
-
-    // Wake producers waiting for queue capacity.
     notFull_.notify_all();
 
     for (std::thread &worker : workers_)
@@ -93,6 +97,11 @@ ThreadPool::~ThreadPool()
             worker.join();
         }
     }
+}
+
+ThreadPool::~ThreadPool()
+{
+    stop();
 }
 
 bool ThreadPool::TaskComesAfter::operator()(

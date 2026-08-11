@@ -26,6 +26,8 @@ public:
 
     ~ThreadPool();
 
+    void stop();
+
     ThreadPool(const ThreadPool &) = delete;
     ThreadPool &operator=(const ThreadPool &) = delete;
 

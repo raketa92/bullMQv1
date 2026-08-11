@@ -11,6 +11,38 @@
   <body>
     <main>
       <h1>Job Engine Dashboard</h1>
+      <section aria-labelledby="metrics-heading">
+        <h2 id="metrics-heading">Metrics</h2>
+
+        <div id="metrics">
+          <article>
+            <span>Total</span>
+            <strong id="metric-total">—</strong>
+          </article>
+
+          <article>
+            <span>Waiting</span>
+            <strong id="metric-waiting">—</strong>
+          </article>
+
+          <article>
+            <span>Active</span>
+            <strong id="metric-active">—</strong>
+          </article>
+
+          <article>
+            <span>Completed</span>
+            <strong id="metric-completed">—</strong>
+          </article>
+
+          <article>
+            <span>Failed</span>
+            <strong id="metric-failed">—</strong>
+          </article>
+        </div>
+
+        <p id="metrics-status">Loading metrics...</p>
+      </section>
 
       <section>
         <h2>Create job</h2>

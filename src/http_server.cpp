@@ -252,6 +252,29 @@ void HttpServer::registerRoutes()
         });
 
     server_.Get(
+        "/metrics",
+        [this](
+            const httplib::Request &,
+            httplib::Response &response)
+        {
+            const JobMetrics metrics =
+                store_.metrics();
+
+            const nlohmann::json body{
+                {"total", metrics.total},
+                {"waiting", metrics.waiting},
+                {"active", metrics.active},
+                {"completed", metrics.completed},
+                {"failed", metrics.failed}};
+
+            response.status = 200;
+
+            response.set_content(
+                body.dump(),
+                "application/json");
+        });
+
+    server_.Get(
         "/jobs/:id",
         [this](
             const httplib::Request &request,

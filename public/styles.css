@@ -94,6 +94,57 @@ button:disabled {
   color: #526078;
 }
 
+#metrics {
+  display: grid;
+  grid-template-columns:
+    repeat(
+      auto-fit,
+      minmax(140px, 1fr)
+    );
+  gap: 14px;
+}
+
+#metrics article {
+  padding: 16px;
+  background: #fafbfc;
+  border: 1px solid #dfe3eb;
+  border-top: 4px solid #526078;
+  border-radius: 8px;
+}
+
+#metrics article:nth-child(2) {
+  border-top-color: #d99a16;
+}
+
+#metrics article:nth-child(3) {
+  border-top-color: #3587d4;
+}
+
+#metrics article:nth-child(4) {
+  border-top-color: #2b9a5b;
+}
+
+#metrics article:nth-child(5) {
+  border-top-color: #d34b5a;
+}
+
+#metrics span {
+  display: block;
+  color: #526078;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+#metrics strong {
+  display: block;
+  margin-top: 8px;
+  font-size: 32px;
+}
+
+#metrics-status {
+  margin: 16px 0 0;
+}
+
 #jobs {
   display: grid;
   grid-template-columns:

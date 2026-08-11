@@ -12,9 +12,39 @@
 
 #include <iostream>
 #include <stdexcept>
+#include <chrono>
+#include <csignal>
+#include <thread>
 
 namespace
 {
+
+    volatile std::sig_atomic_t stopRequested = 0;
+
+    void requestStop(int)
+    {
+        stopRequested = 1;
+    }
+
+    void installSignalHandlers()
+    {
+        if (std::signal(
+                SIGINT,
+                requestStop) == SIG_ERR)
+        {
+            throw std::runtime_error(
+                "Cannot install SIGINT handler");
+        }
+
+        if (std::signal(
+                SIGTERM,
+                requestStop) == SIG_ERR)
+        {
+            throw std::runtime_error(
+                "Cannot install SIGTERM handler");
+        }
+    }
+
     void registerHandlers(
         JobProcessor &processor,
         Logger &logger)
@@ -49,6 +79,8 @@ namespace
 
 int main(int argc, char *argv[])
 {
+    installSignalHandlers();
+
     const std::string databasePath = argc >= 2 ? argv[1] : "jobs.db";
     Logger logger("[APP] ");
 
@@ -81,13 +113,17 @@ int main(int argc, char *argv[])
     std::cout
         << "HTTP server listening on "
         << "http://127.0.0.1:8080\n"
-        << "Press Enter to stop...\n";
+        << "Press Ctrl+C to stop...\n";
 
-    std::cin.get();
+    while (stopRequested == 0)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds{100});
+    }
 
     httpServer.stop();
-    scheduler.stop();
     worker.stop();
+    pool.stop();
+    scheduler.stop();
 
     return 0;
 }

@@ -15,6 +15,26 @@ const createJobButton =
     "button[type='submit']"
   );
 
+const metricsStatus =
+  document.querySelector("#metrics-status");
+
+const metricElements = {
+  total:
+    document.querySelector("#metric-total"),
+
+  waiting:
+    document.querySelector("#metric-waiting"),
+
+  active:
+    document.querySelector("#metric-active"),
+
+  completed:
+    document.querySelector("#metric-completed"),
+
+  failed:
+    document.querySelector("#metric-failed")
+};
+
 function addJobDetail(
   details,
   label,
@@ -137,6 +157,43 @@ function createJobElement(job) {
   return article;
 }
 
+async function loadMetrics() {
+  try {
+    const response =
+      await fetch("/metrics");
+
+    if (!response.ok) {
+      throw new Error(
+        `Server returned HTTP ${response.status}`
+      );
+    }
+
+    const metrics =
+      await response.json();
+
+    metricElements.total.textContent =
+      metrics.total;
+
+    metricElements.waiting.textContent =
+      metrics.waiting;
+
+    metricElements.active.textContent =
+      metrics.active;
+
+    metricElements.completed.textContent =
+      metrics.completed;
+
+    metricElements.failed.textContent =
+      metrics.failed;
+
+    metricsStatus.textContent =
+      "Metrics updated.";
+  } catch (error) {
+    metricsStatus.textContent =
+      `Cannot load metrics: ${error.message}`;
+  }
+}
+
 async function loadJobs() {
   try {
     const response =
@@ -245,7 +302,10 @@ createJobForm.addEventListener(
 
       createJobForm.reset();
 
-      await loadJobs();
+      await Promise.all([
+        loadJobs(),
+        loadMetrics()
+      ]);
     } catch (error) {
       createJobStatus.textContent =
         `Cannot create job: ${error.message}`;
@@ -257,10 +317,16 @@ createJobForm.addEventListener(
 
 const refreshDelayMs = 2000;
 
-async function refreshJobs() {
-  await loadJobs();
+async function refreshDashboard() {
+  await Promise.all([
+    loadJobs(),
+    loadMetrics()
+  ]);
 
-  window.setTimeout(refreshJobs, refreshDelayMs);
+  window.setTimeout(
+    refreshDashboard,
+    refreshDelayMs
+  );
 }
 
-refreshJobs();
+refreshDashboard();

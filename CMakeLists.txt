@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 project(job_engine LANGUAGES CXX)
+include(CTest)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -28,8 +29,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
-add_executable(job_engine
-    src/main.cpp
+add_library(job_engine_core
     src/http_server.cpp
     src/logger.cpp
     src/thread_pool.cpp
@@ -43,17 +43,101 @@ add_executable(job_engine
     src/sqlite_statement.cpp
 )
 
-target_include_directories(job_engine PRIVATE include)
-
-target_link_libraries(job_engine PRIVATE
-    Threads::Threads
-    SQLite3::SQLite3
-    httplib::httplib
-    nlohmann_json::nlohmann_json
+target_include_directories(
+    job_engine_core
+    PUBLIC
+        include
 )
 
-target_compile_options(job_engine PRIVATE
-    -Wall
-    -Wextra
-    -Wpedantic
+target_link_libraries(
+    job_engine_core
+    PUBLIC
+        Threads::Threads
+        SQLite3::SQLite3
+        httplib::httplib
+    PRIVATE
+        nlohmann_json::nlohmann_json
 )
+
+target_compile_options(
+    job_engine_core
+    PRIVATE
+        -Wall
+        -Wextra
+        -Wpedantic
+)
+
+add_executable(
+    job_engine
+    src/main.cpp
+)
+
+target_link_libraries(
+    job_engine
+    PRIVATE
+        job_engine_core
+)
+
+target_compile_options(
+    job_engine
+    PRIVATE
+        -Wall
+        -Wextra
+        -Wpedantic
+)
+
+if(BUILD_TESTING)
+    add_executable(
+        job_store_test
+        tests/job_store_test.cpp
+    )
+
+    target_link_libraries(
+        job_store_test
+        PRIVATE
+            job_engine_core
+    )
+
+    target_compile_options(
+        job_store_test
+        PRIVATE
+            -Wall
+            -Wextra
+            -Wpedantic
+    )
+
+    add_test(
+        NAME job_store_test
+        COMMAND job_store_test
+    )
+
+    add_executable(
+    worker_test
+    tests/worker_test.cpp
+)
+
+target_link_libraries(
+    worker_test
+    PRIVATE
+        job_engine_core
+)
+
+target_compile_options(
+    worker_test
+    PRIVATE
+        -Wall
+        -Wextra
+        -Wpedantic
+)
+
+add_test(
+    NAME worker_test
+    COMMAND worker_test
+)
+
+set_tests_properties(
+    worker_test
+    PROPERTIES
+        TIMEOUT 5
+)
+endif()

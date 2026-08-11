@@ -8,6 +8,16 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <cstddef>
+
+struct JobMetrics
+{
+    std::size_t total = 0;
+    std::size_t waiting = 0;
+    std::size_t active = 0;
+    std::size_t completed = 0;
+    std::size_t failed = 0;
+};
 
 class JobStore
 {
@@ -15,6 +25,8 @@ public:
     explicit JobStore(const std::string &databasePath);
     JobStore(const JobStore &) = delete;
     JobStore &operator=(const JobStore &) = delete;
+
+    JobMetrics metrics();
 
     void save(const Job &job);
 

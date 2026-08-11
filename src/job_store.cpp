@@ -550,6 +550,95 @@ std::vector<Job> JobStore::all()
   return jobs;
 }
 
+JobMetrics JobStore::metrics()
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+
+  SqliteStatement statement(
+      database_.handle(),
+      R"sql(
+        SELECT
+          COUNT(*),
+
+          COUNT(
+            CASE
+              WHEN status = 'waiting'
+              THEN 1
+            END
+          ),
+
+          COUNT(
+            CASE
+              WHEN status = 'active'
+              THEN 1
+            END
+          ),
+
+          COUNT(
+            CASE
+              WHEN status = 'completed'
+              THEN 1
+            END
+          ),
+
+          COUNT(
+            CASE
+              WHEN status = 'failed'
+              THEN 1
+            END
+          )
+        FROM jobs;
+      )sql");
+
+  if (!statement.step())
+  {
+    throw std::runtime_error(
+        "SQLite metrics query returned no row");
+  }
+
+  const auto readCount =
+      [&statement](int column)
+  {
+    const std::int64_t value =
+        statement.columnInt64(column);
+
+    if (value < 0)
+    {
+      throw std::runtime_error(
+          "SQLite returned a negative job count");
+    }
+
+    return static_cast<std::size_t>(
+        value);
+  };
+
+  JobMetrics result;
+
+  result.total = readCount(0);
+  result.waiting = readCount(1);
+  result.active = readCount(2);
+  result.completed = readCount(3);
+  result.failed = readCount(4);
+
+  if (result.total !=
+      result.waiting +
+          result.active +
+          result.completed +
+          result.failed)
+  {
+    throw std::runtime_error(
+        "SQLite returned inconsistent job metrics");
+  }
+
+  if (statement.step())
+  {
+    throw std::runtime_error(
+        "SQLite metrics query returned multiple rows");
+  }
+
+  return result;
+}
+
 void JobStore::waitUntilFinished(
     const std::string &id)
 {
